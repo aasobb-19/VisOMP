@@ -9,7 +9,7 @@ transkrip OMP yang nyata — tanpa data karangan, tanpa login, tanpa konfigurasi
 > dengan jembatan transkrip OMP → Claude Code + supervisor Node. Runtime visual (server, UI 3D,
 > simulasi penugasan) dipakai apa adanya dari upstream.
 
-![Kantor 3D dengan tim yang sedang bekerja](docs/kantor-bekerja.png)
+![Kantor 3D dengan tim yang sedang bekerja](docs/kantor-bekerja.webp)
 
 ## Fitur
 

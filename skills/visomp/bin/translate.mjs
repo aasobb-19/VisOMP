@@ -36,7 +36,7 @@ export const slugOf = (projectReal) => projectReal.replace(/[^a-zA-Z0-9]/g, '-')
 
 function readWindowDays() {
   try {
-    const d = JSON.parse(fs.readFileSync(new URL('./runtime/defaults.json', import.meta.url), 'utf8'));
+    const d = JSON.parse(fs.readFileSync(new URL('../runtime/defaults.json', import.meta.url), 'utf8'));
     return Number.isInteger(d.window_days) && d.window_days > 0 ? d.window_days : 7;
   } catch { return 7; }
 }

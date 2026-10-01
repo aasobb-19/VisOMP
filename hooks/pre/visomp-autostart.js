@@ -2,16 +2,15 @@
 // Letaknya: ~/.omp/agent/hooks/pre/visomp-autostart.js
 // Discovery: otomatis oleh OMP saat startup (tidak perlu konfigurasi tambahan).
 //
-// Server dijalankan sebagai proses anak yang terlepas (detached) — hidup terus walau
-// sesi OMP ditutup. Bila server sudah berjalan untuk project ini, tidak dijalankan lagi.
-// Cache/PID: ~/.cache/visomp/<slug>/  (tidak menulis apa pun ke folder project).
+// Strategi Windows-safe: spawn visomp.mjs start dengan stdio pipe, pantau stdout
+// sampai baris "VISOMP SIAP" atau timeout 20 detik — lalu lepas (unref) prosesnya.
+// Bila server sudah berjalan, langsung tampilkan URL tanpa spawn ulang.
 
-import { execFile, spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
 const exec = promisify(execFile);
 
@@ -24,12 +23,64 @@ function findVisomp() {
   return candidates.find(p => fs.existsSync(p)) ?? null;
 }
 
-// Cek apakah server sudah berjalan untuk project ini.
+// Cek apakah server sudah berjalan untuk project ini via status.
 async function isRunning(visomp, project) {
   try {
     const { stdout } = await exec(process.execPath, [visomp, 'status', '--project', project], { timeout: 4000 });
     return stdout.includes('Berjalan');
   } catch { return false; }
+}
+
+// Ambil URL dari status output.
+async function getUrl(visomp, project) {
+  try {
+    const { stdout } = await exec(process.execPath, [visomp, 'url', '--project', project], { timeout: 3000 });
+    return stdout.trim();
+  } catch { return null; }
+}
+
+// Spawn visomp start, tunggu baris "VISOMP SIAP <url>" di stdout, lalu unref.
+function spawnAndWaitReady(visomp, project, timeoutMs = 20000) {
+  return new Promise((resolve) => {
+    const child = spawn(process.execPath, [visomp, 'start', '--project', project], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+
+    let url = null;
+    let done = false;
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      // Lepaskan proses anak — tetap hidup mandiri
+      child.stdout.destroy();
+      child.stderr.destroy();
+      child.unref();
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => finish({ ok: false, reason: 'timeout' }), timeoutMs);
+
+    child.stdout.on('data', (chunk) => {
+      const text = chunk.toString();
+      const match = text.match(/VISOMP SIAP (http\S+)/);
+      if (match) {
+        url = match[1];
+        clearTimeout(timer);
+        finish({ ok: true, url });
+      }
+    });
+
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      finish({ ok: false, reason: `exit ${code}` });
+    });
+
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      finish({ ok: false, reason: err.message });
+    });
+  });
 }
 
 export default function (pi) {
@@ -39,36 +90,23 @@ export default function (pi) {
 
     const project = ctx.cwd;
 
-    // Jangan spawn ulang kalau sudah berjalan
+    // Sudah berjalan? Ambil URL dan tampilkan saja.
     if (await isRunning(visomp, project)) {
-      ctx.ui.setStatus('visomp', '🏢 Kantor: Live');
+      const url = await getUrl(visomp, project);
+      if (url) ctx.ui.setStatus('visomp', `🏢 ${url}`);
       return;
     }
 
-    // Spawn detached — proses anak hidup mandiri
-    const child = spawn(process.execPath, [visomp, 'start', '--project', project], {
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
+    // Belum berjalan → spawn dan tunggu siap.
+    ctx.ui.setStatus('visomp', '🏢 Kantor: memulai…');
+    const result = await spawnAndWaitReady(visomp, project);
 
-    // Tunggu server siap (max 15 detik)
-    const t0 = Date.now();
-    while (Date.now() - t0 < 15000) {
-      await new Promise(r => setTimeout(r, 800));
-      if (await isRunning(visomp, project)) break;
-    }
-
-    // Ambil URL dari status
-    try {
-      const { stdout } = await exec(process.execPath, [visomp, 'url', '--project', project], { timeout: 3000 });
-      const url = stdout.trim();
-      if (url) {
-        ctx.ui.setStatus('visomp', `🏢 ${url}`);
-        pi.logger.info(`VisOMP siap: ${url}`);
-      }
-    } catch {
-      ctx.ui.setStatus('visomp', '🏢 Kantor: gagal start');
+    if (result.ok) {
+      ctx.ui.setStatus('visomp', `🏢 ${result.url}`);
+      pi.logger.info(`VisOMP siap: ${result.url}`);
+    } else {
+      ctx.ui.setStatus('visomp', `🏢 Kantor: gagal (${result.reason})`);
+      pi.logger.warn(`VisOMP gagal start: ${result.reason}`);
     }
   });
 

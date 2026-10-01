@@ -38,32 +38,40 @@ macOS & Linux: sama, melalui bash/terminal biasa. Windows: Git Bash atau PowerSh
 
 ## Pasang
 
-Pilih salah satu:
-
-### A. Sebagai skill OMP (disarankan — satu perintah di sesi mana pun)
+### Otomatis (disarankan) — satu perintah, kantor langsung menyala setiap sesi
 
 ```bash
-git clone https://github.com/<kamu>/VisOMP.git
-mkdir -p ~/.agents/skills
-ln -s "$PWD/VisOMP/skills/visomp" ~/.agents/skills/visomp   # Windows: copy foldernya
-# atau: cp -R VisOMP/skills/visomp ~/.agents/skills/
+git clone https://github.com/aasobb-19/VisOMP.git
+cd VisOMP
+bash install.sh
 ```
 
-Buka sesi OMP **baru** di folder project, lalu:
+Skrip ini:
+1. Menyalin `skills/visomp/` ke `~/.agents/skills/visomp` (skill OMP)
+2. Memasang `hooks/pre/visomp-autostart.js` ke `~/.omp/agent/hooks/pre/`
+   — hook ini mendeteksi `session_start` dan menjalankan server kantor secara otomatis
 
-```text
-/skill:visomp
-```
+Setelah itu, **buka sesi OMP baru** di folder project mana pun → kantor langsung hidup,
+URL tampil di status bar OMP (`🏢 http://127.0.0.1:8788/kerja`). Tidak perlu ketik perintah apa pun.
 
-atau cukup bilang *"nyalakan visomp"* — model membaca skill ini dan menjalankan perintahnya.
+> Gunakan `--no-hook` bila tidak ingin autostart:
+> `bash install.sh --no-hook` → skill terpasang tapi server harus dijalankan manual.
 
-### B. Manual (tanpa skill)
+### Manual (tanpa autostart)
 
 ```bash
-git clone https://github.com/<kamu>/VisOMP.git
-cd <folder-project-yang-ingin-dipantau>
-node /path/ke/VisOMP/skills/visomp/bin/visomp.mjs start
+git clone https://github.com/aasobb-19/VisOMP.git
+# pasang skill saja:
+cp -R VisOMP/skills/visomp ~/.agents/skills/
+# jalankan manual di folder project:
+node ~/.agents/skills/visomp/bin/visomp.mjs start
 ```
+
+### Sebagai skill OMP saja (tanpa installer)
+
+Buka sesi OMP baru di folder project, lalu ketik `/skill:visomp` atau bilang
+*"nyalakan visomp"* — model membaca skill dan menjalankan perintahnya.
+
 
 ## Pakai
 
